@@ -184,21 +184,87 @@
  *  This is the default behavior of Mongoose.
  */
 
-// import mongoose
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import mongoose from "mongoose";
+import { fileURLToPath } from "node:url";
+
+const currentFilePath = fileURLToPath(import.meta.url);
+const credentialsFilePath = join(dirname(currentFilePath), "creden.txt");
+const credentialsFileUri = existsSync(credentialsFilePath)
+  ? readFileSync(credentialsFilePath, "utf8").trim()
+  : "";
+
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  credentialsFileUri ||
+  "mongodb+srv://HasanDB:<db_password>@cluster0.rygtjue.mongodb.net/labDB";
 
 // establish connection
+async function connectToDatabase() {
+  if (
+    !process.env.MONGO_URI &&
+    (MONGO_URI.includes("<db_password>") || MONGO_URI.includes("HasanDB"))
+  ) {
+    throw new Error(
+      "Set your real Atlas connection string in MONGO_URI or replace the placeholder in server.js."
+    );
+  }
 
+  await mongoose.connect(MONGO_URI);
+  console.log("Connected to MongoDB");
+}
 
 // define schema
+const studentSchema = new mongoose.Schema({
+  name: String,
+  age: Number,
+  major: String,
+});
 
+const Student = mongoose.model("Student", studentSchema);
 
 // create document
-
+async function createStudents() {
+  await Student.deleteMany({ name: { $in: ["Ali", "Sara"] } });
+  await Student.insertMany([
+    { name: "Ali", age: 21, major: "CS" },
+    { name: "Sara", age: 23, major: "SE" },
+  ]);
+  console.log("✅ Inserted");
+}
 
 // read document
-
+async function readStudents() {
+  const all = await Student.find();
+  console.log(all);
+}
 
 // update document
-
+async function updateStudent() {
+  await Student.updateOne({ name: "Ali" }, { $set: { age: 22 } });
+  console.log("✅ Updated Ali");
+}
 
 // delete document
+async function deleteStudent() {
+  await Student.deleteOne({ name: "Sara" });
+  console.log("✅ Deleted Sara");
+}
+
+async function main() {
+  try {
+    await connectToDatabase();
+    await createStudents();
+    await readStudents();
+    await updateStudent();
+    await deleteStudent();
+    await readStudents();
+  } catch (error) {
+    console.error("MongoDB error:", error.message);
+  } finally {
+    await mongoose.disconnect();
+  }
+}
+
+main();
